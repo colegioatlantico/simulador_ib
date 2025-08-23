@@ -7,6 +7,18 @@
 // Tabela para converter EE/TOK -> pontos adicionais no total IB
 const TOK_TABLE = { 0: 0, 1: 4, 2: 5, 3: 7 };
 
+/*
+const TABELA_DE_CONVERSAO = {
+  3.4: 9.7, 
+  3.5: 10.0, 3.6: 10.2, 3.7: 10.5, 3.8: 10.8, 3.9: 11.1, 
+  4.0: 11.4, 4.1: 11.7, 4.2: 12.0, 4.3: 12.2, 4.4: 12.5, 
+  4.5: 12.8, 4.6: 13.1, 4.7: 13.4,4.8: 13.7, 4.9: 14.0, 
+  5.0: 14.2, 5.1: 14.5, 5.2: 14.8, 5.3: 15.1, 5.4: 15.4, 
+  5.5: 15.7, 5.6: 16.0, 5.7: 16.2, 5.8: 16.5, 5.9: 16.8, 
+  6.0: 17.1, 6.1: 17.4, 6.2: 17.7, 6.3: 18.0, 6.4: 18.2, 
+  6.5: 18.5, 6.6: 18.8, 6.7: 19.1, 6.8: 19.4, 6.9: 19.7, 7.0: 20.0
+};
+*/
 
 // Bloqueio de limites por input (mantido do original)
 function block_limits(element, min, max){
@@ -21,10 +33,20 @@ function block_limits(element, min, max){
 // de 3.5 → 10.0 e 7.0 → 20.0, com arredondamento por defeito à décima.
 // Esta função replica esse comportamento.
 function ibTo20(value) {
+  
+  // arredonda o value de entrada às décimas
+  value = Math.round(value * 10) / 10;
+
   // transformação linear: 10 + (value - 3.5) * (10/3.5)
-  const raw = 10 + (value - 3.5) * (10 / 3.5);
+  let raw = 0;
+  if (value != 0) {
+    raw = (value - 3) / (7-3) * 10.5 + 9.5;
+  }
+  
+
   // arredonda por defeito à décima (ex.: 10.29 → 10.2)
-  const flooredTenth = Math.floor(raw * 10) / 10;
+  const flooredTenth = Math.round(raw * 10) / 10;
+
   // limita ao intervalo [0, 20]
   return Math.max(0, Math.min(20, flooredTenth));
 }
