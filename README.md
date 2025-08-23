@@ -1,4 +1,4 @@
-# Simulador IB — Frontend
+# Simulador IB
 
 Este projeto é um simulador visual para conversão de notas do International Baccalaureate (IB) para o sistema português de provas de ingresso.
 
