@@ -83,6 +83,7 @@ function recalc() {
   const tok_convertido = TOK_TABLE[eeTok] ?? 0;
 
   // total geral IB
+  //const total = total_disciplinas + tok_convertido;
   const total = total_disciplinas + tok_convertido;
 
   // média IB em 7 (6 disciplinas + TOK/EE convertido)
@@ -95,7 +96,7 @@ function recalc() {
   // actualiza UI
   document.getElementById("total_disciplinas").innerText = total_disciplinas;
   document.getElementById("tok_convertido").innerText = tok_convertido;
-  document.getElementById("total").innerText = total;
+  document.getElementById("total").innerText = total_disciplinas + eeTok;
   document.getElementById("final_secundario_20").innerText = final20.toFixed(1);
   document.getElementById("final_secundario_200").innerText = final200;
 
@@ -119,7 +120,6 @@ document.addEventListener("input", (e) => {
 });
 
 // inicialização
-
 document.addEventListener("DOMContentLoaded", () => {
   recalc();
 });
