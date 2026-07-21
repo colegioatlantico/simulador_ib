@@ -1,6 +1,6 @@
 // Portaria n.º 433/2005 — Diário da República, 19 de Abril de 2005
 // Tabela 2: disciplinas IB 1–7 → ensino secundário PT
-// Tabela 3: AR/Core 1–3 → escala IB 1–7
+// Tabela 3: AR/Core 1–3 → escala IB 1–7 (a Portaria NÃO define um valor para AR = 0)
 // Tabela 4: média IB arredondada → média PT → nota final PT arredondada
 
 const SUBJECT_TABLE = {
@@ -13,8 +13,11 @@ const SUBJECT_TABLE = {
   7: 200,
 };
 
+// Apenas 1, 2 e 3 são legalmente definidos pela Tabela n.º 3.
+// AR = 0 (nota mínima possível no sistema atual do IB) não consta da Portaria,
+// que foi escrita antes da escala numérica 0–3 do "core" atual do IB.
+// Não inventamos um valor para 0 — é tratado como um caso fora da tabela.
 const AR_TABLE = {
-  0: 0,
   1: 4,
   2: 5,
   3: 7,
@@ -72,12 +75,29 @@ function setText(id, value) {
   if (el) el.innerText = value;
 }
 
-function readNumber(id) {
-  const el = document.getElementById(id);
-  if (!el) return 0;
+function readGradeInputs(ids) {
+  return ids.map(id => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const v = Number(el.value);
+    return Number.isFinite(v) ? v : null;
+  });
+}
 
-  const v = Number(el.value);
-  return Number.isFinite(v) ? v : 0;
+// AR is read as a string first so we can tell "field is empty" apart from "field is 0".
+// This is the crux of the bug: arRaw === 0 (a real, failing AR score) must never be
+// treated the same as "no AR entered yet".
+function readAR() {
+  const el = document.getElementById("eetok");
+  if (!el) return { entered: false, value: null };
+
+  const raw = el.value;
+  if (raw === "" || raw === null) return { entered: false, value: null };
+
+  const v = Number(raw);
+  if (!Number.isFinite(v)) return { entered: false, value: null };
+
+  return { entered: true, value: v };
 }
 
 function roundToOneDecimal(value) {
@@ -85,21 +105,16 @@ function roundToOneDecimal(value) {
 }
 
 function subjectTo200(value) {
-  return SUBJECT_TABLE[value] ?? 0;
+  return value === null ? null : (SUBJECT_TABLE[value] ?? null);
 }
 
 function diplomaConversion(mediaIb) {
+  if (mediaIb === null) return null;
+
   const mediaIbRounded = roundToOneDecimal(mediaIb);
   const row = DIPLOMA_TABLE.find(item => item.ib === mediaIbRounded);
 
-  if (!row) {
-    return {
-      mediaIb: mediaIbRounded,
-      media20: 0,
-      final20: 0,
-      final200: 0,
-    };
-  }
+  if (!row) return null; // outside the table's 3.4–7.0 range
 
   return {
     mediaIb: row.ib,
@@ -110,60 +125,65 @@ function diplomaConversion(mediaIb) {
 }
 
 function recalc() {
-  const grades = [
-    readNumber("g1"),
-    readNumber("g2"),
-    readNumber("g3"),
-    readNumber("g4"),
-    readNumber("g5"),
-    readNumber("g6"),
-  ];
+  const grades = readGradeInputs(["g1", "g2", "g3", "g4", "g5", "g6"]);
+  const allSubjectsFilled = grades.every(g => g !== null);
+  const totalDisciplinas = allSubjectsFilled ? grades.reduce((a, b) => a + b, 0) : null;
 
-  const arRaw = readNumber("eetok"); // 0–3
-  const totalDisciplinas = grades.reduce((a, b) => a + b, 0);
-  const arConvertido = AR_TABLE[arRaw] ?? 0;
+  const ar = readAR(); // { entered, value }
 
-  // A Portaria usa AR convertido para a escala 1–7 antes de calcular a média.
-  const mediaIb = arRaw === 0
-    ? totalDisciplinas / 6
-    : (totalDisciplinas + arConvertido) / 7;
+  let mediaIb = null;
+  let warning = "";
 
-  // Depois aplica a Tabela n.º 4: média IB -> média ensino secundário -> nota final arredondada.
+  if (!allSubjectsFilled) {
+    warning = "Preencha as 6 disciplinas.";
+  } else if (!ar.entered) {
+    // No AR entered yet — genuinely nothing to average in; don't guess.
+    mediaIb = totalDisciplinas / 6;
+    warning = "AR/Core ainda não preenchido — média calculada apenas com as 6 disciplinas.";
+  } else if (ar.value < 1 || ar.value > 3) {
+    // Includes AR = 0: a real, valid IB core score under the current 0–3 system,
+    // but one the 2005 Portaria's Tabela n.º 3 does not define a conversion for.
+    // We do NOT silently substitute a value (e.g. 0) here, because doing so either
+    // masks a failing core score (if excluded, as the old code did) or invents an
+    // unofficial number (if given a made-up conversion).
+    mediaIb = null;
+    warning = "AR = " + ar.value + " está fora do intervalo (1–3) definido pela Tabela n.º 3 da " +
+      "Portaria n.º 433/2005. Um AR de 0 é uma nota real e reprovatória no sistema atual do IB, " +
+      "mas não tem conversão oficial nesta tabela de 2005 — confirme o procedimento junto da " +
+      "escola/DGE antes de calcular uma equivalência. Note também que, em certas combinações, " +
+      "um AR de 0 pode implicar reprovação automática do Diploma IB, tornando esta conversão " +
+      "inaplicável.";
+  } else {
+    const arConvertido = AR_TABLE[ar.value];
+    // AR is included in both the sum and the divisor — a low or failing AR score
+    // pulls the average DOWN, exactly as it should, instead of being dropped.
+    mediaIb = (totalDisciplinas + arConvertido) / 7;
+  }
+
   const diploma = diplomaConversion(mediaIb);
 
-  setText("total_disciplinas", totalDisciplinas);
-  setText("tok_convertido", arConvertido);
-  setText("total", totalDisciplinas + arRaw);
-  setText("media_ib", diploma.mediaIb.toFixed(1));
-  setText("media_secundario_20", diploma.media20.toFixed(2));
-  setText("final_secundario_20", diploma.final20);
-  setText("final_secundario_200", diploma.final200);
+  setText("total_disciplinas", totalDisciplinas ?? "—");
+  setText("tok_convertido", ar.entered && ar.value >= 1 && ar.value <= 3 ? AR_TABLE[ar.value] : "—");
+  setText("media_ib", mediaIb !== null ? mediaIb.toFixed(2) : "—");
+  setText("media_secundario_20", diploma ? diploma.media20.toFixed(2) : "—");
+  setText("final_secundario_20", diploma ? diploma.final20 : "—");
+  setText("final_secundario_200", diploma ? diploma.final200 : "—");
+  setText("warning", warning);
 
   const cells = document.querySelectorAll(".convertido");
   const mapById = {};
-
-  cells.forEach(td => {
-    mapById[td.getAttribute("data-for")] = td;
-  });
+  cells.forEach(td => { mapById[td.getAttribute("data-for")] = td; });
 
   ["g1", "g2", "g3", "g4", "g5", "g6"].forEach((id, idx) => {
-    if (mapById[id]) {
-      mapById[id].innerText = subjectTo200(grades[idx]);
-    }
+    if (mapById[id]) mapById[id].innerText = subjectTo200(grades[idx]) ?? "—";
   });
 }
 
 function clearForm() {
   ["g1", "g2", "g3", "g4", "g5", "g6", "eetok"].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.value = 0;
-  });
-
-  ["g1_input", "g2_input", "g3_input", "g4_input", "g5_input", "g6_input", "gN_input"].forEach(id => {
-    const el = document.getElementById(id);
     if (el) el.value = "";
   });
-
   recalc();
 }
 
